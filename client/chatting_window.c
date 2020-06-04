@@ -1,6 +1,7 @@
 #include <gtk/gtk.h>	// 头文件
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <errno.h>
 #include"chat.h"
 #include"chatting_window.h"
@@ -14,12 +15,12 @@ GtkWidget *chatting_window;
 GtkTextBuffer *bufferuser;
 GtkTextBuffer *buffernotice;
 GtkTextBuffer *buffers;
+GtkWidget *filew;
 char fname[]="/var/tmp/";
 extern int client_socket;
 extern char *username;
 
-char *docupath;
-char *docuname;
+
 //根据button的值发送消息时的自我维护。
 void sendtouser(GtkButton  *button, char * friend)
 {
@@ -30,7 +31,7 @@ void sendtouser(GtkButton  *button, char * friend)
 	char buf[100];
 	GtkTextIter start,end;
 	gtk_text_buffer_get_bounds(buffers,&start,&end);
-	gchar* text=gtk_text_buffer_get_text(buffers,&start,&end,FALSE);/*获得文本框缓冲区文本*/
+	gchar* text=gtk_text_buffer_get_text(buffers,&start,&end,FALSE);
 	gtk_text_buffer_set_text(buffers,"",0);
 	if(strlen(text)==0)
 	{
@@ -47,14 +48,13 @@ void sendtouser(GtkButton  *button, char * friend)
 			return;
 		}
 		queue_push(write_queue,packet);
-		//write(client_socket,&packet,sizeof(Packet));
 		strcpy(buf,data.message.id_from);
 		strcat(buf,":\n\t");
 		strcat(buf,data.message.str);
 		strcat(buf,"\n");
-		GtkTextIter start,end;    //新建保存文字在buffer中位置的结构start和end。
-		gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(bufferuser),&start,&end);/*获得缓冲区开始和结束位置的Iter*/
-		gtk_text_buffer_insert(GTK_TEXT_BUFFER(bufferuser),&end,buf,strlen(buf));/*插入文本到缓冲区*/
+		GtkTextIter start,end; 
+		gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(bufferuser),&start,&end);
+		gtk_text_buffer_insert(GTK_TEXT_BUFFER(bufferuser),&end,buf,strlen(buf));
 		char path[50] = "./history/";
         strcat(path,data.message.id_to);
 		FILE *fp = fopen(path,"a+");
@@ -62,55 +62,12 @@ void sendtouser(GtkButton  *button, char * friend)
         fclose(fp);
 	}
 }
-//保存消息记录
-// void savetxt(GtkButton  *button, gpointer entry)
-// {
-// 	struct flock lock1;    //新建结构体flock为lock1。
-// 	lock1.l_whence = SEEK_SET;    //相对位移量的起点设置为文件头0。
-// 	lock1.l_start = 0;    //设置位移量。
-// 	lock1.l_len = 0;    //设置加锁区域的长度。
-// 	//以上三个设置可以为整个文件加锁。
-// 	lock1.l_type = F_WRLCK;    //初始化l_type为写入锁。
-// 	lock1.l_pid = -1;    //初始化l_pid。
-// 	struct flock lock2;    //新建结构体flock为lock2。
-// 	lock2.l_whence = SEEK_SET;    //相对位移量的起点设置为文件头0。
-// 	lock2.l_start = 0;    //设置位移量。
-// 	lock2.l_len = 0;    //设置加锁区域的长度。
-// 	//以上三个设置可以为整个文件加锁。
-// 	lock2.l_type = F_RDLCK;    //初始化l_type为读取锁。
-// 	lock2.l_pid = -1;    //初始化l_pid。
-// 	int src_file, dest_file;//用来存储源文件与目标文件的描述符。
-// 	unsigned char buff[1024];//用来存储内容。
-// 	int real_read_len;//用来存储真实读取的字节数。
-// 	char txt_name[60];//用来存储文本记录名。
-// 	sprintf(txt_name,"%s%s","./msgsave_",username);	//将内容写入buf。
-// 	src_file = open(fname, O_RDONLY);//打开fname，并将文件描述符存在src_file。
-// 	dest_file = open(txt_name,O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);//打开txt_name，并将文件描述符存在dest_file。
-// 	if (src_file< 0 || dest_file< 0)//如果源文件与目标文件打开失败。
-// 	{
-// 		return;
-// 	}	
-// 	fcntl(dest_file, F_SETLKW, &lock1);//以阻塞的方式为dest_file设置结构为lock1的文件锁。
-// 	fcntl(src_file, F_SETLKW, &lock2);//以阻塞的方式为src_file设置结构为lock2的文件锁。
-// 	while ((real_read_len = read(src_file, buff, sizeof(buff))) > 0)//读取源文件sec_file的sizeof(buff)个字节的数据并存在buff中，并记录真实读取的字节数。
-// 	{
-// 		write(dest_file, buff, real_read_len);//向dest_fie写入buff内real_read_len字节的数据。
-// 	}
-// 	fcntl(dest_file, F_UNLCK, &lock1);//给dest_file解锁。
-// 	fcntl(src_file, F_UNLCK, &lock2);//给src_file解锁。
-// 	close(dest_file);//关闭文件描述符dest_file。
-// 	close(src_file);//关闭文件描述符src_file。
-// }
-//读取消息记录
-void readtxt(GtkButton  *button, gpointer entry)
-{
 
-}
-void file_ok_sel( GtkWidget *w,GtkFileSelection *fs )
+void file_ok_sel( GtkWidget *w, char *friend_name)
 {
 	char buf[50]={0};
 	char bufrev[50]={0};
-	char *filepath=gtk_file_selection_get_filename (GTK_FILE_SELECTION (fs));
+	char *filepath=gtk_file_selection_get_filename (GTK_FILE_SELECTION (filew));
 	int len=strlen(filepath);
 	int j=0;
 	for(int i=len-1;i>0;i--)
@@ -124,78 +81,58 @@ void file_ok_sel( GtkWidget *w,GtkFileSelection *fs )
 	{
 		bufrev[i]=buf[lb-i-1];
 	}
-    //printf("\n%s\n",bufrev);
-	docupath=filepath;
-	docuname=bufrev;
-	printf("docupath=%s,docuname=%s\n",docupath,docuname);
-    docu_send();
+    docu_send(friend_name, filepath, bufrev);
 }
-void writefile_window()
+void writefile_window(GtkButton  *button, char *friend_name)
 {
-    GtkWidget *filew;
     gtk_init (NULL, NULL);
     filew = gtk_file_selection_new ("File selection");
     g_signal_connect (G_OBJECT (filew), "destroy",G_CALLBACK (gtk_main_quit), NULL);
-    g_signal_connect (G_OBJECT (GTK_FILE_SELECTION (filew)->ok_button),"clicked",G_CALLBACK (file_ok_sel), filew);
+    g_signal_connect (G_OBJECT (GTK_FILE_SELECTION (filew)->ok_button),"clicked",G_CALLBACK (file_ok_sel), friend_name);
     g_signal_connect_swapped (G_OBJECT (GTK_FILE_SELECTION (filew)->ok_button),"clicked",G_CALLBACK (gtk_widget_destroy), filew);
-    //gtk_file_selection_set_filename (GTK_FILE_SELECTION(filew),"penguin.png");
     gtk_widget_show (filew);
     gtk_main ();
     return 0;
 }
-
-void pop_document_send(GtkWindow *parent,Data data){
-	
-	gdk_threads_enter(); 
-	GtkWidget *dialog;
-    GtkWidget *button;
-    GtkWidget *label;
-    GtkWidget *hbox;
-    Packet packet;
-	printf("1\n");
-    dialog = gtk_dialog_new_with_buttons("TeliTalk",parent,GTK_DIALOG_MODAL,GTK_STOCK_OK,GTK_RESPONSE_OK,NULL);
-	printf("2\n");
-    char message_str[500];
-    strcpy(message_str,data.message.id_from);
-    strcat(message_str,"给您发送了文件"); 
-	strcat(message_str,data.message.str);
-    label = gtk_label_new(message_str);
-	printf("3\n");
-    gtk_dialog_set_has_separator(GTK_DIALOG(dialog),FALSE);
-    hbox = gtk_hbox_new(FALSE,5);
-    gtk_container_set_border_width(GTK_CONTAINER(hbox),10);
-    gtk_box_pack_start_defaults(GTK_BOX(hbox),label);
-    gtk_box_pack_start_defaults(GTK_BOX(GTK_DIALOG(dialog)->vbox),hbox);
-    gtk_widget_show_all(dialog);
-    gtk_dialog_run(GTK_DIALOG(dialog));
-    gtk_widget_destroy(dialog);
-	gdk_threads_leave();
+int file_size(char* filename)
+{
+    struct stat statbuf;
+    stat(filename,&statbuf);
+    int size=statbuf.st_size;
+    return size;
 }
-
-int docu_send()
+int docu_send(char* id_to, char* docupath, char *docuname)
 {
 	char  file_buff[4096];
 	Kind kind;
 	Packet packet;
 	Data data;
 	FILE *fp;
-	//strcpy(data.message.id_from,username);
+	strcpy(data.message.id_from,username);
 	strcpy(data.message.str,docuname);
-	//strcpy(data.message.id_from,id_from);
-	//strcpy(data.message.id_to,id_to);
-	build_packet(&packet,enum_docu,data);
+	strcpy(data.message.id_to,id_to);
+	build_packet(&packet,enum_file,data);
 	if(write(client_socket,&packet,sizeof(Packet))<0){
 		perror("fail to recv docusen");
 		close(client_socket);
 		exit(1);
 	};
-    if( ( fp = fopen(docupath,"rb") ) == NULL ){
+	int size = file_size(docupath);
+	char string[20];
+    sprintf(string,"%d",size);
+	strcpy(data.message.str,string);
+	build_packet(&packet,enum_file,data);
+	if(write(client_socket,&packet,sizeof(Packet))<0){
+		perror("fail to recv docusen");
+		close(client_socket);
+		exit(1);
+	};
+
+    if((fp = fopen(docupath,"rb")) == NULL ){
         printf("File open error.\n");
         return 0;
     }
 
-    //传输文件
-	//memset(file_buff,0,4096);
     bzero(file_buff,sizeof(file_buff));
     while(!feof(fp))
     {
@@ -209,116 +146,8 @@ int docu_send()
     return 1;
 }
 
-int docu_rece(char* file_name)
-{
-    char  file_buff[4096];
-    FILE *fp;
-    int  n;
-    //创建待接收文件实体
-    if((fp = fopen(file_name,"wb") ) == NULL )
-    {
-        printf("new file create fail.\n");
-        return 0;
-    }
-	sleep(3);
-    //把二进制文件读取到缓冲区
 
-    while(1){
-        n = read(client_socket, file_buff, 4096);
-
-        fwrite(file_buff, 1, n, fp);//将缓冲区内容写进文件        
-		if(n < 4096)
-            break;
-		printf("len=%d\n",n);
-    }
-    fclose(fp);
-    return 1;
-}
 ///处理接受到的消息
-void *strdeal(void *arg)
-{
-	while(1)
-	{
-		Packet packet;
-		Data data;
-		Kind kind;
-		char buf[100];
-		if(read(client_socket, &packet, sizeof(Packet))<0)
-		{
-			perror("fail to recv");    //把"fail to recv"输出到标准错误stderr。
-			close(client_socket);    //关闭socket端口。
-			exit(1);
-		}
-		parse_packet(packet,&kind,&data);
-
-		printf("test:%s\n",data.message.str);
-		if(kind==enum_chat){//chat-state
-			if(!strcmp(data.message.str,"new_message"))
-			{
-                strcpy(buf,data.message.id_from);
-                strcat(buf,"给你发了一条消息\n");
-                GtkTextIter start,end;    //新建保存文字在buffer中位置的结构start和end。
-                gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(buffernotice),&start,&end);/*获得缓冲区开始和结束位置的Iter*/
-                gtk_text_buffer_insert(GTK_TEXT_BUFFER(buffernotice),&end,buf,strlen(buf));/*插入文本到缓冲区*/
-            }
-			else if(!strcmp(data.message.id_to,username))
-			{
-                strcpy(buf,data.message.id_from);
-                strcat(buf,":\n\t");
-                strcat(buf,data.message.str);
-                strcat(buf,"\n");
-				GtkTextIter start,end;    //新建保存文字在buffer中位置的结构start和end。
-				gtk_text_buffer_get_bounds(GTK_TEXT_BUFFER(bufferuser),&start,&end);/*获得缓冲区开始和结束位置的Iter*/
-				gtk_text_buffer_insert(GTK_TEXT_BUFFER(bufferuser),&end,buf,strlen(buf));/*插入文本到缓冲区*/
-			}
-		}
-		else if(kind==enum_docu){
-			//pop_document_send(chatting_window,data.message.str);
-			if(!strcmp(data.message.str,"1")){//sucess
-				//打开文件
-				
-				char file_buff[4096];
-				FILE *fq;
-				int len, rec_len;
-				if( ( fq = fopen(docupath,"rb") ) == NULL )
-				{
-					printf("File open error.\n");
-					return 0;
-				}
-				//传输文件
-				bzero(file_buff,sizeof(file_buff));
-				while(!feof(fq))
-				{
-					len = fread(file_buff, 1, sizeof(file_buff), fq);
-					if(len != write(client_socket, file_buff, len)){
-						printf("writing file .\n");
-						break;
-					}
-					printf("len=%d\n",len);
-					//sleep(1);
-					printf("sleep\n");
-				}
-				fclose(fq);
-			}
-
-			else
-			{	
-				pop_document_send(chatting_window,data);
-				printf("receiving docu\n");
-				if(docu_rece(data.message.str)==1)
-				{
-					printf("docu_recv_success\n");
-				}
-				else
-				{
-					printf("docu_recv_error\n");
-				}
-			}
-		}
-
-	}
-}
-
 void process(char *friend)
 {
 	Packet packet;
@@ -376,7 +205,6 @@ int chatting_win(char *friend_name)
 	pthread_t thread;
 	GtkWidget *entry;
 	gtk_init(NULL, NULL);	
-	//printf("zzz:%d\n",client_socket);
     // 创建顶层窗口
     chatting_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     // 设置窗口的标题
@@ -431,16 +259,10 @@ int chatting_win(char *friend_name)
     GtkWidget *send_all = gtk_button_new_with_label("--发送文件--");
     gtk_fixed_put(GTK_FIXED(fixed), send_all, 45, 570);
     gtk_widget_set_size_request(send_all,100,40);
-
-    GtkWidget *read_m = gtk_button_new_with_label("--读取记录--");
-    gtk_fixed_put(GTK_FIXED(fixed), read_m, 175, 570);
-    gtk_widget_set_size_request(read_m,100,40);
  
 	// 绑定回调函数
 	g_signal_connect(bsend, "clicked", G_CALLBACK(sendtouser),friend_name);
-	g_signal_connect(send_all, "clicked", G_CALLBACK(writefile_window), entry);
-	//g_signal_connect(save, "clicked", G_CALLBACK(savetxt), entry);
-	g_signal_connect(read_m, "clicked", G_CALLBACK(readtxt), entry);
+	g_signal_connect(send_all, "clicked", G_CALLBACK(writefile_window), friend_name);
 
  
 	// 文本框聊天窗口

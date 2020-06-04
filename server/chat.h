@@ -39,7 +39,7 @@ typedef enum _kind{
 	//注册			登录 		    登出		    发送消息
 	regsuc, logsuc, falpwd, falacc,
 	//注册成功，登陆成功，错误的密码，错误的用户名
-	enum_friend
+	enum_friend, enum_file, enum_fyes
 }Kind;						//用枚举变量表示包类型
 typedef struct _packet{
 	Kind kind;		        //包类型

@@ -38,6 +38,7 @@ int shmid;                    /*共享内存区(多人聊天)标识符(ID)*/
 int semid;                    /*信号量标识符(ID)*/
 char fork_name[20];           /*关键变量，用于标示当前fork的用户名*/
 int fork_id;
+char  file_buff[4096];
 
 int init_socket(int port,int addr);
 /*初始化套接字，传入端口和地址，自动生成一个套接字并关联地址，监听。返回套接字。若失败，返回-1*/
@@ -69,9 +70,12 @@ void chat_with(Packet packet);
 /*发送信息处理*/
 int make_friend(Message message);
 /*好友申请处理*/
+int docu_rece();
+/*接收客户端传来的文件，缓存*/
+int docu_send();
+/*向客户端发送缓存的文件*/
 
-int main()
-{
+int main(){
     struct in_addr client_addr;
     struct sockaddr_in mysock;
     int length;
@@ -130,8 +134,7 @@ int main()
     }
 }
 
-void regist(User user)
-{
+void regist(User user){
     FILE *fp;
     int flag = 0;
     int same = 0;
@@ -192,8 +195,7 @@ void regist(User user)
     return;
 }
 
-void login(User user)
-{
+void login(User user){
     FILE *fp;
     int flag = 0;
     int id = -1;
@@ -266,9 +268,7 @@ void login(User user)
     return;
 }
 
-void chat_with(Packet packet)
-{
-    printf("rece\n");
+void chat_with(Packet packet){
     int msglength;
     P(W);                                           /*在无写进程时进入*/
     P(RW);                                          /*互斥访问共享内存区*/
@@ -280,8 +280,7 @@ void chat_with(Packet packet)
     return;
 }
 
-int make_friend(Message message)
-{
+int make_friend(Message message){
     FILE *ffp, *ufp;
     int flag = 0;
     char line[100];
@@ -380,13 +379,98 @@ int make_friend(Message message)
     V(FILESEM);
     return flag;
 }
-
-void handle_packet(Packet packet)
+int file_size(char* filename)
 {
+    struct stat statbuf;
+    stat(filename,&statbuf);
+    int size=statbuf.st_size;
+    return size;
+}
+int docu_send(char *fpath){
+    int len, rec_len;
+    FILE *fq;
+    //读取文件本地路径及文件名
+    int size = file_size(fpath);
+    char string[20];
+    Kind kind;
+	Packet packet;
+	Data data;
+    sprintf(string,"%d",size);
+	strcpy(data.message.str,string);
+	build_packet(&packet,enum_file,data);
+    write(client_socket,&packet,sizeof(Packet));
+    //打开文件
+    if( ( fq = fopen(fpath,"rb") ) == NULL ){
+        printf("File open error.\n");
+        return 0;
+    }
+
+    //传输文件
+    bzero(file_buff,sizeof(file_buff));
+    while(!feof(fq)){
+        len = fread(file_buff, 1, sizeof(file_buff), fq);
+        if(len != write(client_socket, file_buff, len)){
+            printf("write.\n");
+            break;
+        }
+    }
+    fclose(fq);
+    return 1;
+}
+
+int docu_rece(char *file_name)
+{
+    FILE *fp;
+    int n = 0;
+    //接受客户端传过来的文件名
+
+    Kind kind;
+    Data data;
+    Packet packet;
+    read(client_socket, &packet, sizeof(Packet));
+    parse_packet(packet, &kind, &data);
+    int size = atoi(data.message.str);
+    int now = 0;
+    sleep(3);
+    //创建待接收文件实体
+    if((fp = fopen(file_name,"wb") ) == NULL )
+    {
+        printf("new file create fail.\n");
+        return 0;
+    }
+    memset(file_buff,0,sizeof(file_buff));
+    //把二进制文件读取到缓冲区
+    while(now < size){
+        n = read(client_socket, file_buff, sizeof(file_buff));
+        printf("n=%d\n",n);
+        fwrite(file_buff, 1, n, fp);//将缓冲区内容写进文件
+        now += n;
+        //if(n < 4096)
+         //   break;
+    }
+    fclose(fp);
+    return 1;
+}
+
+int recv_file(Message message){
+    char path[4096] = "file/";
+    strcat(path, message.str);
+    int ret = docu_rece(path);
+    printf("111");
+    return ret;
+}
+
+void trans_file(Message message){
+    char path[4096] = "file/";
+    strcat(path, message.str);
+    docu_send(path);
+}
+
+void handle_packet(Packet packet){
     Kind kind;
     Data data;
     parse_packet(packet, &kind, &data);
-    int fri = 0;
+    int ret = 0;
     switch (kind) {
         case enum_regist:
             regist(data.userinfo);
@@ -398,10 +482,19 @@ void handle_packet(Packet packet)
             chat_with(packet);
             break;
         case enum_friend:
-            fri = make_friend(data.message);
-            if(fri == 1 || fri == 2){
+            ret = make_friend(data.message);
+            if(ret == 1 || ret == 2){
                 chat_with(packet);
             }
+            break;
+        case enum_file:
+            ret = recv_file(data.message);
+            if(ret == 1){
+                chat_with(packet);
+            }
+            break;
+        case enum_fyes:
+            trans_file(data.message);
             break;
         default:
             printf("oops, we failed in catch your kind: %d\n", kind);
@@ -409,8 +502,8 @@ void handle_packet(Packet packet)
     }
     return;
 }
-void write_to()
-{
+
+void write_to(){
     int msglength;
     msglength = space->length;
     int count;
@@ -437,9 +530,9 @@ void write_to()
             for(;msglength<space->length;msglength++)       /*读取新消息*/
             {
                 parse_packet(space->packet[msglength%MAXMSG], &kind, &data);
+                printf("%s,%s\n",data.message.id_to,data.message.str);
                 if(strcmp(fork_name, data.message.id_to) == 0)
                 {
-                    printf("%s,%s\n",data.message.id_to,data.message.str);
                     write(client_socket,&(space->packet[msglength%MAXMSG]),sizeof(Packet));
                 }
             }
@@ -458,8 +551,8 @@ void write_to()
         sleep(1);                                 /*每秒轮询一次*/
     }
 }
-void read_from()
-{
+
+void read_from(){
     printf("reading...\n");
     char str[MAXLEN+1];
     int msglength;
@@ -475,16 +568,16 @@ void read_from()
         }
     }
 }
-void do_server()
-{
+
+void do_server(){
     pthread_t thIDr, thIDw;
     pthread_create(&thIDr, NULL, (void *)read_from, NULL);
     pthread_create(&thIDw, NULL, (void *)write_to, NULL);
     pthread_join(&thIDr, NULL);
     return;
 }
-void exitfunc(int signal)
-{
+
+void exitfunc(int signal){
     if(shmctl(shmid, IPC_RMID, 0) == -1)                    /*关闭共享内存区*/
     {
         printf("shared memory closed error!\n");
@@ -499,12 +592,12 @@ void exitfunc(int signal)
     }
     _exit(0);
 }
-void waitchild(int signal)
-{
+
+void waitchild(int signal){
     wait(NULL);
 }
-int init_sem(int rw, int mutex, int w, int count, int file)
-{
+
+int init_sem(int rw, int mutex, int w, int count, int file){
     union semun arg;
     int flag;
     arg.array = (unsigned short*)malloc(sizeof(unsigned short) * 5);
@@ -517,30 +610,30 @@ int init_sem(int rw, int mutex, int w, int count, int file)
     free(arg.array);
     return flag;
 }
-int P(int type)
-{
+
+int P(int type){
     struct sembuf buf;
     buf.sem_num = type;
     buf.sem_op = -1;
     buf.sem_flg = SEM_UNDO;
     return semop(semid, &buf, 1);
 }
-int V(int type)
-{
+
+int V(int type){
     struct sembuf buf;
     buf.sem_num = type;
     buf.sem_op = 1;
     buf.sem_flg = SEM_UNDO;
     return semop(semid, &buf, 1);
 }
-int sem_setval(int type, int value)
-{
+
+int sem_setval(int type, int value){
     union semun arg;
     arg.val = value;
     return semctl(semid, type, SETVAL, arg);
 }
-int init_socket(int port, int addr)
-{
+
+int init_socket(int port, int addr){
     struct sockaddr_in server_addr;             /*服务器地址结构*/
     int server_socket;                          /*服务器套接字*/
     server_socket=socket(AF_INET, SOCK_STREAM, 0);

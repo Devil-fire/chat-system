@@ -34,9 +34,75 @@ FILE *fp;
 int friend_num_now=0;
 GtkButton *button_friend[MAX_Friend];
 int chatting_num=0;
-
-
 pthread_t thIDr,thIDw;
+
+int docu_rece(char* file_name)
+{
+    char  file_buff[4096];
+    FILE *fp;
+    int  n;
+    Kind kind;
+    Data data;
+    Packet packet;
+    read(client_socket, &packet, sizeof(Packet));
+    parse_packet(packet, &kind, &data);
+    int size = atoi(data.message.str);
+    int now = 0;
+    if((fp = fopen(file_name,"wb") ) == NULL )
+    {
+        printf("new file create fail.\n");
+        return 0;
+    }
+    while(now < size){
+        n = read(client_socket, file_buff, sizeof(file_buff));
+        printf("n=%d\n",n);
+        fwrite(file_buff, 1, n, fp);
+        now += n;
+    }
+    fclose(fp);
+    return 1;
+}
+
+void pop_document(GtkWindow *parent,Data data){
+	Packet packet;
+	gdk_threads_enter(); 
+	GtkWidget *dialog;
+    GtkWidget *button;
+    GtkWidget *label;
+    GtkWidget *hbox;
+    dialog = gtk_dialog_new_with_buttons("TeliTalk",parent,GTK_DIALOG_MODAL,GTK_STOCK_OK,GTK_RESPONSE_OK,NULL);
+    char message_str[500];
+    strcpy(message_str,data.message.id_from);
+    strcat(message_str,"给您发送了文件"); 
+	strcat(message_str,data.message.str);
+    label = gtk_label_new(message_str);
+    gtk_dialog_set_has_separator(GTK_DIALOG(dialog),FALSE);
+    hbox = gtk_hbox_new(FALSE,5);
+    gtk_container_set_border_width(GTK_CONTAINER(hbox),10);
+    gtk_box_pack_start_defaults(GTK_BOX(hbox),label);
+    gtk_box_pack_start_defaults(GTK_BOX(GTK_DIALOG(dialog)->vbox),hbox);
+    gtk_widget_show_all(dialog);
+    gint result = gtk_dialog_run(GTK_DIALOG(dialog));
+    switch(result)
+    {
+        case GTK_RESPONSE_OK:
+            build_packet(&packet,enum_fyes,data);
+            write(client_socket,&packet,sizeof(Packet));
+            // pthread_t recv_file;
+            // pthread_create(&recv_file, NULL, (void *)docu_rece, data.message.str);
+            docu_rece(data.message.str);
+            break;
+        case GTK_RESPONSE_CANCEL:
+            gtk_widget_destroy(dialog);
+            gdk_threads_leave(); 
+            return;
+        default:
+            g_print("something wrong!\n");
+            break;
+    }
+    gtk_widget_destroy(dialog);
+	gdk_threads_leave();
+}
 void pop_friend(GtkWindow *parent,int flag,char *id_to)
 {
     gdk_threads_enter(); 
@@ -196,15 +262,15 @@ void on_button_clicked_chat(GtkWidget* button)
 
 void on_button_clicked_chat_together(GtkWidget* button)
 {
-    Kind kind=enum_ipchat;
-    Data data;
-    Packet packet;
-    strcpy(data.message.id_from,username);
-    build_packet(&packet,kind,data);
-    queue_push(write_queue,packet);
-    //write(client_socket, &packet, sizeof(Packet));
-    pthread_cancel(thIDw);
-    chatting_win_together();
+    // //Kind kind=enum_ipchat;
+    // Data data;
+    // Packet packet;
+    // strcpy(data.message.id_from,username);
+    // build_packet(&packet,kind,data);
+    // queue_push(write_queue,packet);
+    // //write(client_socket, &packet, sizeof(Packet));
+    // pthread_cancel(thIDw);
+    // chatting_win_together();
 }
 
 void destroy_logout()
@@ -259,7 +325,11 @@ void read_from()
                 printf("mmm: %s\n",data.message.id_from);
                 queue_push(read_queue,packet);
             }
-        }//&&(!strcmp(data.message.str,"new_message")))pop_message(window,0,data.message.id_from);
+        }else if(kind==enum_file)
+        {
+            pop_document(window,data);
+        }
+        //&&(!strcmp(data.message.str,"new_message")))pop_message(window,0,data.message.id_from);
         //g_mutex_unlock(mutex);/*解锁*/
         //g_mutex_unlock(mutex_together);
         sleep(0.1);

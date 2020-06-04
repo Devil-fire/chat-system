@@ -10,6 +10,8 @@ int build_packet(Packet *packet,Kind kind,...){
 		case enum_login:packet->data=(Data)va_arg(ap,User);break;
 		case enum_chat:packet->data=(Data)va_arg(ap,Message);break;
 		case enum_friend:packet->data=(Data)va_arg(ap,Message);break;
+		case enum_file:packet->data=(Data)va_arg(ap,Message);break;
+		case enum_fyes:packet->data=(Data)va_arg(ap,Message);break;
 		case regsuc:break;
 		case logsuc:break;
 		case falpwd:break;
