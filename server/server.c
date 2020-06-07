@@ -379,13 +379,14 @@ int make_friend(Message message){
     V(FILESEM);
     return flag;
 }
-int file_size(char* filename)
-{
+
+int file_size(char* filename){
     struct stat statbuf;
     stat(filename,&statbuf);
     int size=statbuf.st_size;
     return size;
 }
+
 int docu_send(char *fpath){
     int len, rec_len;
     FILE *fq;
@@ -418,8 +419,7 @@ int docu_send(char *fpath){
     return 1;
 }
 
-int docu_rece(char *file_name)
-{
+int docu_rece(char *file_name){
     FILE *fp;
     int n = 0;
     //接受客户端传过来的文件名
@@ -466,10 +466,37 @@ void trans_file(Message message){
     docu_send(path);
 }
 
+void send_blist(){
+    char namelist[MAXMSG][MAXLEN];
+    int line = 0;
+    int i;
+    FILE *fp = fopen("bbslist.txt", "r");
+    if(!fp){
+        printf("can't open file\n");
+        return;
+    }
+    while(!feof(fp)){
+        fscanf(fp, "%s", namelist[line++]);
+    }
+    fclose(fp);
+    Packet packet;
+    Data data;
+    sprintf(data.message.str, "%d", line-1);
+    build_packet(&packet,enum_blist,data);
+    write(client_socket,&packet,sizeof(Packet));
+    for(i = 0; i < line; i++){
+        strcpy(data.message.str, namelist[i]);
+        build_packet(&packet,enum_blist,data);
+        write(client_socket,&packet,sizeof(Packet));
+    }
+    return;
+}
+
 void handle_packet(Packet packet){
     Kind kind;
     Data data;
     parse_packet(packet, &kind, &data);
+    
     int ret = 0;
     switch (kind) {
         case enum_regist:
@@ -495,6 +522,9 @@ void handle_packet(Packet packet){
             break;
         case enum_fyes:
             trans_file(data.message);
+            break;
+        case enum_blist:
+            send_blist();
             break;
         default:
             printf("oops, we failed in catch your kind: %d\n", kind);

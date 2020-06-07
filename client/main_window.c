@@ -7,6 +7,7 @@
 #include "chatting_together_window.h"
 #include "queue.h"
 #include "hashmap.h"
+#include "bbs_main.h"
 
 extern int client_socket;
 
@@ -30,11 +31,13 @@ GtkButton *button;
 GtkWidget *frame;
 GtkWidget *scrolled;
 FILE *fp;
+int count = -1;
 //char *id;
 int friend_num_now=0;
 GtkButton *button_friend[MAX_Friend];
 int chatting_num=0;
 pthread_t thIDr,thIDw;
+list bbs_list[100];
 
 int docu_rece(char* file_name)
 {
@@ -284,6 +287,28 @@ void destroy_logout()
     //write(client_socket, &packet, sizeof(Packet));
     gtk_main_quit();
 }
+void split(char *src,const char *separator,char **dest,int *num) {
+     char *pNext;
+     int count = 0;
+     if (src == NULL || strlen(src) == 0)
+        return;
+     if (separator == NULL || strlen(separator) == 0)
+        return;
+     pNext = (char *)strtok(src,separator);
+     while(pNext != NULL) {
+          *dest++ = pNext;
+          ++count;
+         pNext = (char *)strtok(NULL,separator); 
+    }  
+    *num = count;
+} 	
+void bbs_window()
+{
+    Data data;
+    Packet packet;
+    build_packet(&packet,enum_blist,data);
+    queue_push(write_queue,packet);
+}
 void read_from()
 {
     Kind kind;
@@ -298,7 +323,6 @@ void read_from()
 			exit(1);
 		}
 		parse_packet(packet,&kind,&data);
-        printf("asdgnflasg\n");
         if(kind==enum_friend&&(!strcmp(data.message.str,"1"))) pop_friend(window,1,data.message.id_from);
         else if(kind==enum_friend&&(!strcmp(data.message.str,"add_friend"))) pop_friend(window,2,data.message.id_from);
         else if(kind==enum_friend&&(!strcmp(data.message.str,"accept"))) pop_friend(window,3,data.message.id_from);
@@ -316,19 +340,42 @@ void read_from()
             fclose(fp);
             if( friend_chatting[hash_table_lookup(hashTable,data.message.id_from)->nValue] == 1)
             {
-                printf("kkk: %s\n",data.message.id_from);
                 queue_push(read_queue,packet);
             }
             else
             {
                 pop_message(window,0,data.message.id_from);
-                printf("mmm: %s\n",data.message.id_from);
                 queue_push(read_queue,packet);
             }
-        }else if(kind==enum_file)
+        }
+        else if(kind==enum_file)
         {
             pop_document(window,data);
         }
+        else if(kind==enum_blist)
+        {
+            if (count == -1)
+            {
+                count = atoi(data.message.str);  
+                printf("%d\n",count);
+            }
+            else if(count != 0)
+            {
+                int num;
+	            char *revbuf[5] = {0};
+                split(data.message.str,",",revbuf,&num); 
+                if (num==5)
+                {
+                   strcpy(bbs_list[--count].id,revbuf[0]);
+                   strcpy(bbs_list[count].time,revbuf[1]);
+                   strcpy(bbs_list[count].title,revbuf[2]);
+                   strcpy(bbs_list[count].text,revbuf[3]);
+                   bbs_list[count].flag = atoi(revbuf[4]);
+                   printf("%s\n",bbs_list[count].title);
+                }
+            }
+        }
+        
         //&&(!strcmp(data.message.str,"new_message")))pop_message(window,0,data.message.id_from);
         //g_mutex_unlock(mutex);/*解锁*/
         //g_mutex_unlock(mutex_together);
@@ -480,8 +527,16 @@ void main_win(char *user)
     GtkWidget *button1;
     button1=gtk_button_new_with_label("xzb广场入口");
     // gtk_button_set_relief(button1,GTK_RELIEF_NONE);
-    gtk_box_pack_start(GTK_BOX(hbox3),button1,FALSE,FALSE,100);
+    gtk_box_pack_start(GTK_BOX(hbox3),button1,FALSE,FALSE,20);
     g_signal_connect(G_OBJECT(button1),"clicked",G_CALLBACK(on_button_clicked_chat_together),NULL);
+
+
+    list list1[10];
+    GtkWidget *button2;
+    button2=gtk_button_new_with_label("BBS");
+    // gtk_button_set_relief(button1,GTK_RELIEF_NONE);
+    gtk_box_pack_start(GTK_BOX(hbox3),button2,FALSE,FALSE,100);
+    g_signal_connect(G_OBJECT(button2),"clicked",G_CALLBACK(bbs_window),NULL);
     
     //好友列表
     vbox1=gtk_vbox_new(FALSE,0);
