@@ -1,4 +1,4 @@
-main:main.o login_window.o chatting_window.o chatting_together_window.o chat.o AES.o main_window.o  queue.o hashmap.o bbs_main.o md5.o
+main:main.o login_window.o chatting_window.o chatting_together_window.o chat.o AES.o main_window.o  queue.o hashmap.o bbs_main.o history_window.o bbs_detail.o md5.o
 	gcc -o $@ $^ `pkg-config --cflags --libs gtk+-2.0`
 main.o:main.c
 	gcc -c $< `pkg-config --cflags --libs gtk+-2.0`
@@ -11,6 +11,10 @@ chatting_together_window.o:chatting_together_window.c
 main_window.o:main_window.c main_window.h
 	gcc -c $< `pkg-config --cflags --libs gtk+-2.0`
 bbs_main.o:bbs_main.c bbs_main.h
+	gcc -c $< `pkg-config --cflags --libs gtk+-2.0`
+bbs_detail.o:bbs_detail.c bbs_detail.h
+	gcc -c $< `pkg-config --cflags --libs gtk+-2.0`
+history_window.o:history_window.c history_window.h
 	gcc -c $< `pkg-config --cflags --libs gtk+-2.0`
 chat.o:chat.c chat.h
 	gcc -c $<

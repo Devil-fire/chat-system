@@ -5,6 +5,7 @@
 #include <errno.h>
 #include"chat.h"
 #include"chatting_window.h"
+#include"history_window.h"
 #include"queue.h"
 #include"hashmap.h"
 
@@ -81,6 +82,7 @@ void file_ok_sel( GtkWidget *w, char *friend_name)
 	{
 		bufrev[i]=buf[lb-i-1];
 	}
+	printf("%s,%s\n",friend_name,filepath);
     docu_send(friend_name, filepath, bufrev);
 }
 void writefile_window(GtkButton  *button, char *friend_name)
@@ -92,6 +94,11 @@ void writefile_window(GtkButton  *button, char *friend_name)
     g_signal_connect_swapped (G_OBJECT (GTK_FILE_SELECTION (filew)->ok_button),"clicked",G_CALLBACK (gtk_widget_destroy), filew);
     gtk_widget_show (filew);
     gtk_main ();
+    return 0;
+}
+void history_show(GtkButton  *button, char *friend_name)
+{
+	history_win(friend_name);
     return 0;
 }
 int file_size(char* filename)
@@ -196,7 +203,7 @@ gboolean quit_chatroom(GtkWidget *button, char * friend)
 	//memset(friend_chatting[chatting_num],0,20);
 	friend_chatting[hash_table_lookup(hashTable,friend)->nValue] = 0;
 	gtk_main_quit();
-	//gtk_widget_destroy(chatting_window);
+	//gtk_widget_destroy(history_win);
 	return FALSE;
 }
 
@@ -218,7 +225,7 @@ int chatting_win(char *friend_name)
 	// "destroy" 和 gtk_main_quit 连接
 	g_signal_connect(G_OBJECT(chatting_window), "destroy", G_CALLBACK(quit_chatroom), friend_name);
     //创建一个固定容器
- 	GtkWidget *fixed = gtk_fixed_new(); 	
+ 	GtkWidget *fixed = gtk_fixed_new(); 
 	gtk_container_add(GTK_CONTAINER(chatting_window), fixed);
 
 	// g_signal_connect(G_OBJECT(chatting_window),1000,800);
@@ -259,10 +266,15 @@ int chatting_win(char *friend_name)
     GtkWidget *send_all = gtk_button_new_with_label("--发送文件--");
     gtk_fixed_put(GTK_FIXED(fixed), send_all, 45, 570);
     gtk_widget_set_size_request(send_all,100,40);
+
+	GtkWidget *history_record = gtk_button_new_with_label("--历史记录--");
+    gtk_fixed_put(GTK_FIXED(fixed), history_record, 150, 570);
+    gtk_widget_set_size_request(history_record,100,40);
  
 	// 绑定回调函数
 	g_signal_connect(bsend, "clicked", G_CALLBACK(sendtouser),friend_name);
 	g_signal_connect(send_all, "clicked", G_CALLBACK(writefile_window), friend_name);
+	g_signal_connect(history_record, "clicked", G_CALLBACK(history_show), friend_name);
 
  
 	// 文本框聊天窗口

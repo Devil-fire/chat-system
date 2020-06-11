@@ -40,7 +40,11 @@ typedef enum _kind{
 	regsuc, logsuc, falpwd, falacc,
 	//注册成功，登陆成功，错误的密码，错误的用户名
 	enum_friend, enum_file, enum_fyes,
-	enum_blist
+	//加好友，发文件，接收文件
+	enum_blist, enum_bcont, enum_bpost,
+	//帖子列表，帖子内容，发帖
+	enum_brepl, enum_bpostf,enum_bfyes
+	//回帖，带文件的发帖
 }Kind;						//用枚举变量表示包类型
 typedef struct _packet{
 	Kind kind;		        //包类型

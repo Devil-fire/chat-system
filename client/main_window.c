@@ -30,6 +30,8 @@ GtkWidget *search_friend;
 GtkButton *button;
 GtkWidget *frame;
 GtkWidget *scrolled;
+
+int bbs_open = 0;
 FILE *fp;
 int count = -1;
 //char *id;
@@ -37,7 +39,7 @@ int friend_num_now=0;
 GtkButton *button_friend[MAX_Friend];
 int chatting_num=0;
 pthread_t thIDr,thIDw;
-list bbs_list[100];
+
 
 int docu_rece(char* file_name)
 {
@@ -47,22 +49,32 @@ int docu_rece(char* file_name)
     Kind kind;
     Data data;
     Packet packet;
+    pthread_mutex_lock(&mtx);
     read(client_socket, &packet, sizeof(Packet));
     parse_packet(packet, &kind, &data);
     int size = atoi(data.message.str);
     int now = 0;
-    if((fp = fopen(file_name,"wb") ) == NULL )
+    char path[50];
+    sprintf(path,"file/%s",file_name);
+    if((fp = fopen(path,"wb") ) == NULL)
     {
         printf("new file create fail.\n");
         return 0;
     }
     while(now < size){
-        n = read(client_socket, file_buff, sizeof(file_buff));
-        printf("n=%d\n",n);
-        fwrite(file_buff, 1, n, fp);
+        if (size - now >= 4096)
+        {
+           n = read(client_socket, file_buff, sizeof(file_buff));
+        }
+        else
+        {
+            n = read(client_socket, file_buff, size-now);
+        }
+        fwrite(file_buff, 1, n, fp);//将缓冲区内容写进文件
         now += n;
     }
     fclose(fp);
+    pthread_mutex_unlock(&mtx);
     return 1;
 }
 
@@ -91,8 +103,6 @@ void pop_document(GtkWindow *parent,Data data){
         case GTK_RESPONSE_OK:
             build_packet(&packet,enum_fyes,data);
             write(client_socket,&packet,sizeof(Packet));
-            // pthread_t recv_file;
-            // pthread_create(&recv_file, NULL, (void *)docu_rece, data.message.str);
             docu_rece(data.message.str);
             break;
         case GTK_RESPONSE_CANCEL:
@@ -254,9 +264,6 @@ void on_button_clicked_search(GtkWidget* button,gpointer data)
 }
 void on_button_clicked_chat(GtkWidget* button)
 {
-    Kind kind=enum_chat;
-    Data data;
-    Packet packet;
     const char*friend_name = gtk_button_get_label(button);
     friend_chatting[hash_table_lookup(hashTable,friend_name)->nValue] = 1;
     chatting_win(friend_name);
@@ -265,15 +272,7 @@ void on_button_clicked_chat(GtkWidget* button)
 
 void on_button_clicked_chat_together(GtkWidget* button)
 {
-    // //Kind kind=enum_ipchat;
-    // Data data;
-    // Packet packet;
-    // strcpy(data.message.id_from,username);
-    // build_packet(&packet,kind,data);
-    // queue_push(write_queue,packet);
-    // //write(client_socket, &packet, sizeof(Packet));
-    // pthread_cancel(thIDw);
-    // chatting_win_together();
+    chatting_win_together();
 }
 
 void destroy_logout()
@@ -304,10 +303,24 @@ void split(char *src,const char *separator,char **dest,int *num) {
 } 	
 void bbs_window()
 {
+    bbs_flag = 0;
+    bbs_detail_flag = 0;
     Data data;
     Packet packet;
     build_packet(&packet,enum_blist,data);
     queue_push(write_queue,packet);
+    while(1)
+    {
+        if (bbs_flag)
+        {
+            bbs_open = 1;
+            bbs_flag = 0;
+            bbs_main(username, bbs_list);
+            bbs_open = 0;
+            break;
+        }
+    }
+    bbs_flag = 0;
 }
 void read_from()
 {
@@ -316,13 +329,16 @@ void read_from()
     Packet packet;
     while(1)
     {
+        pthread_mutex_lock(&mtx);
 		if(read(client_socket, &packet, sizeof(Packet))<0)
 		{
 			perror("fail to recv");    //把"fail to recv"输出到标准错误stderr。
 			close(client_socket);    //关闭socket端口。
 			exit(1);
 		}
+        pthread_mutex_unlock(&mtx);
 		parse_packet(packet,&kind,&data);
+        printf("%d,%s\n",kind,data.message.str);
         if(kind==enum_friend&&(!strcmp(data.message.str,"1"))) pop_friend(window,1,data.message.id_from);
         else if(kind==enum_friend&&(!strcmp(data.message.str,"add_friend"))) pop_friend(window,2,data.message.id_from);
         else if(kind==enum_friend&&(!strcmp(data.message.str,"accept"))) pop_friend(window,3,data.message.id_from);
@@ -352,33 +368,81 @@ void read_from()
         {
             pop_document(window,data);
         }
-        else if(kind==enum_blist)
+        else if(kind==enum_blist && bbs_open == 0)
         {
             if (count == -1)
             {
-                count = atoi(data.message.str);  
-                printf("%d\n",count);
+                count = atoi(data.message.str);
             }
             else if(count != 0)
             {
                 int num;
-	            char *revbuf[5] = {0};
-                split(data.message.str,",",revbuf,&num); 
-                if (num==5)
+	            char *revbuf[6] = {0};
+                split(data.message.str,"/",revbuf,&num); 
+                printf("num:%d",num);
+                if (num==6)
                 {
                    strcpy(bbs_list[--count].id,revbuf[0]);
                    strcpy(bbs_list[count].time,revbuf[1]);
                    strcpy(bbs_list[count].title,revbuf[2]);
                    strcpy(bbs_list[count].text,revbuf[3]);
                    bbs_list[count].flag = atoi(revbuf[4]);
-                   printf("%s\n",bbs_list[count].title);
+                }
+                printf("count:%d\n",count);
+                if(count==0)
+                {
+                    bbs_flag = 1;
+                    count=-1;
+                }
+            }
+            else
+            {
+                bbs_flag = 1;
+                count=-1;
+            }
+        }
+        else if(kind==enum_blist && bbs_open == 1)
+        {
+            if (count == -1)
+            {
+                if (strcmp(data.message.str,""))
+                {
+                    count = atoi(data.message.str); 
+                    bbs_num = count;
+                }
+            }
+            else if(count != 0)
+            {
+                --count;
+                queue_push(read_queue,packet);
+                if(count==0)
+                {
+                    bbs_flag = 1;
+                    count=-1;
                 }
             }
         }
-        
-        //&&(!strcmp(data.message.str,"new_message")))pop_message(window,0,data.message.id_from);
-        //g_mutex_unlock(mutex);/*解锁*/
-        //g_mutex_unlock(mutex_together);
+        else if(kind==enum_bcont)
+        {
+            if (count == -1)
+            {
+                if (strcmp(data.message.str,""))
+                {
+                    count = atoi(data.message.str); 
+                    bbs_detail_num = count;
+                }
+            }
+            else if(count != 0)
+            {
+                --count;
+                queue_push(read_queue,packet);
+                if(count==0)
+                {
+                    bbs_detail_flag = 1;
+                    count=-1;
+                }
+            }
+        }
         sleep(0.1);
     }
 }
@@ -457,7 +521,7 @@ void update_new(char *friend)//新建联系人
     // gtk_box_pack_start(GTK_BOX(hbox4_0),vbox4_0,FALSE,FALSE,0);
     friend_num_now++;
     button_friend[friend_num_now]=gtk_button_new_with_label(friend);
-    hash_table_insert(hashTable, friend,friend_num_now );
+    hash_table_insert(hashTable, friend,friend_num_now);
     g_signal_connect(G_OBJECT(button_friend[friend_num_now]),"clicked",G_CALLBACK(on_button_clicked_chat),NULL);
     gtk_button_set_relief(button_friend[friend_num_now],GTK_RELIEF_NONE);
     PangoFontDescription *font_desc=pango_font_description_from_string("Serif 15");
@@ -485,11 +549,6 @@ void main_win(char *user)
     hash_table_init(hashTable);
     write_queue = createQueue();
     read_queue = createQueue();
-    //mutex = g_mutex_new();
-    //g_mutex_unlock(mutex);
-    //mutex_together=g_mutex_new();
-    //g_thread_create((GThreadFunc)read_from, NULL, FALSE, NULL);
-    //pthread_join(thIDr,NULL);
     pthread_create(&thIDr, NULL, (void *)read_from, NULL);
     pthread_create(&thIDw, NULL, (void *)write_to, NULL);
     username=user;
@@ -516,26 +575,18 @@ void main_win(char *user)
     button=gtk_button_new_with_label("search");
     g_signal_connect(G_OBJECT(button),"clicked",G_CALLBACK(on_button_clicked_search),NULL);
     gtk_box_pack_start(GTK_BOX(hbox2),button,FALSE,FALSE,0);
-    GtkWidget *new_friend=gtk_button_new_with_label("好友申请");
-    gtk_box_pack_start(GTK_BOX(hbox2),new_friend,FALSE,FALSE,50);
-
+    GtkWidget *button1=gtk_button_new_with_label("广场入口");
+    gtk_box_pack_start(GTK_BOX(hbox2),button1,FALSE,FALSE,50);
+    g_signal_connect(G_OBJECT(button1),"clicked",G_CALLBACK(on_button_clicked_chat_together),NULL);
 
     //群聊接口
     hbox3=gtk_hbox_new(FALSE,0);
-    gtk_widget_set_size_request(hbox3,300,50);
-    gtk_box_pack_start(GTK_BOX(vbox),hbox3,FALSE,FALSE,20);
-    GtkWidget *button1;
-    button1=gtk_button_new_with_label("xzb广场入口");
+    gtk_widget_set_size_request(hbox3,400,50);
+    gtk_box_pack_start(GTK_BOX(vbox),hbox3,FALSE,FALSE,0);
+    GtkWidget *button2=gtk_button_new_with_label("论坛入口");
+    gtk_widget_set_size_request(button2,360,40);
     // gtk_button_set_relief(button1,GTK_RELIEF_NONE);
-    gtk_box_pack_start(GTK_BOX(hbox3),button1,FALSE,FALSE,20);
-    g_signal_connect(G_OBJECT(button1),"clicked",G_CALLBACK(on_button_clicked_chat_together),NULL);
-
-
-    list list1[10];
-    GtkWidget *button2;
-    button2=gtk_button_new_with_label("BBS");
-    // gtk_button_set_relief(button1,GTK_RELIEF_NONE);
-    gtk_box_pack_start(GTK_BOX(hbox3),button2,FALSE,FALSE,100);
+    gtk_box_pack_start(GTK_BOX(hbox3),button2,FALSE,FALSE,20);
     g_signal_connect(G_OBJECT(button2),"clicked",G_CALLBACK(bbs_window),NULL);
     
     //好友列表

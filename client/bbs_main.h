@@ -1,4 +1,4 @@
-//#ifndef bbs_main_h
+#ifndef  bbs_main_h
 #define bbs_main_h
 
 #include <stdio.h>
@@ -11,10 +11,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdarg.h>
-
-#define MYPORT 4567			//约定端口
-#define MAXLEN 140			//最大消息长度
-#define SHTLEN 20       //短消息长度
+#include "chat.h"
 
 typedef struct _list{
 	char id[SHTLEN + 1];         //发帖人
@@ -24,4 +21,11 @@ typedef struct _list{
 	int flag;            //文件标志位，flag为0表示没有文件，为1表示有文件
 }list;
 
-void bbs_main(char *user, list *list[]);
+void bbs_main(char *user, list *list);
+int bbs_flag;
+int bbs_num;
+int bbs_detail_flag;
+int bbs_detail_num;
+list bbs_list[100];
+
+#endif

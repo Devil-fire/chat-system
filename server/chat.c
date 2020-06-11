@@ -13,6 +13,11 @@ int build_packet(Packet *packet,Kind kind,...){
 		case enum_file:packet->data=(Data)va_arg(ap,Message);break;
 		case enum_fyes:packet->data=(Data)va_arg(ap,Message);break;
 		case enum_blist:packet->data=(Data)va_arg(ap,Message);break;
+		case enum_bcont:packet->data=(Data)va_arg(ap,Message);break;
+		case enum_bpost:packet->data=(Data)va_arg(ap,Message);break;
+		case enum_brepl:packet->data=(Data)va_arg(ap,Message);break;
+		case enum_bpostf:packet->data=(Data)va_arg(ap,Message);break;
+		case enum_bfyes:packet->data=(Data)va_arg(ap,Message);break;
 		case regsuc:break;
 		case logsuc:break;
 		case falpwd:break;

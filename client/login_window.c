@@ -197,7 +197,7 @@ void loginpage(int argc,char* argv[])
     gtk_box_pack_start(GTK_BOX(box),box3,TRUE,TRUE,7);
 	// 下面借助GdkPixbuf来修改图片的大小，注意接口以gdk_开头，不属于控件类
 	// 创建pixbuf，需要占用资源，使用完，需要人为释放
-	GdkPixbuf *src = gdk_pixbuf_new_from_file("./neutalk.jpg", NULL);// 读取原图片	
+	GdkPixbuf *src = gdk_pixbuf_new_from_file("./Bittalk.jpg", NULL);// 读取原图片	
 	GdkPixbuf *dst = gdk_pixbuf_scale_simple(src, 500, 120, GDK_INTERP_BILINEAR);	// 修改图片大小(500, 120), 保存在dst
 	GtkWidget *image_two = gtk_image_new_from_pixbuf(dst);	// 通过pixbuf创建图片控件
 	g_object_unref(src);	// pixbuf使用完，需要人为释放资源
@@ -259,7 +259,7 @@ void registpage()
     gtk_box_pack_start(GTK_BOX(box),box3,TRUE,TRUE,7);
 	// 下面借助GdkPixbuf来修改图片的大小，注意接口以gdk_开头，不属于控件类
 	// 创建pixbuf，需要占用资源，使用完，需要人为释放
-	GdkPixbuf *src = gdk_pixbuf_new_from_file("./neutalk.jpg", NULL);// 读取原图片	
+	GdkPixbuf *src = gdk_pixbuf_new_from_file("./Bittalk.jpg", NULL);// 读取原图片	
 	GdkPixbuf *dst = gdk_pixbuf_scale_simple(src, 500, 120, GDK_INTERP_BILINEAR);	// 修改图片大小(500, 120), 保存在dst
 	GtkWidget *image_two = gtk_image_new_from_pixbuf(dst);	// 通过pixbuf创建图片控件
 	g_object_unref(src);	// pixbuf使用完，需要人为释放资源

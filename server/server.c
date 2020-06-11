@@ -38,7 +38,7 @@ int shmid;                    /*共享内存区(多人聊天)标识符(ID)*/
 int semid;                    /*信号量标识符(ID)*/
 char fork_name[20];           /*关键变量，用于标示当前fork的用户名*/
 int fork_id;
-char  file_buff[4096];
+char file_buff[4096];
 
 int init_socket(int port,int addr);
 /*初始化套接字，传入端口和地址，自动生成一个套接字并关联地址，监听。返回套接字。若失败，返回-1*/
@@ -74,6 +74,7 @@ int docu_rece();
 /*接收客户端传来的文件，缓存*/
 int docu_send();
 /*向客户端发送缓存的文件*/
+int delete_sub_str(const char *str, const char *sub_str, char *result_str);
 
 int main(){
     struct in_addr client_addr;
@@ -441,13 +442,19 @@ int docu_rece(char *file_name){
     memset(file_buff,0,sizeof(file_buff));
     //把二进制文件读取到缓冲区
     while(now < size){
-        n = read(client_socket, file_buff, sizeof(file_buff));
-        printf("n=%d\n",n);
+        printf("%d\n",now);
+        if (size - now >= 4096)
+        {
+           n = read(client_socket, file_buff, sizeof(file_buff));
+        }
+        else
+        {
+            n = read(client_socket, file_buff, size-now);
+        }
         fwrite(file_buff, 1, n, fp);//将缓冲区内容写进文件
         now += n;
-        //if(n < 4096)
-         //   break;
     }
+    printf("end:%d\n",now);
     fclose(fp);
     return 1;
 }
@@ -455,7 +462,10 @@ int docu_rece(char *file_name){
 int recv_file(Message message){
     char path[4096] = "file/";
     strcat(path, message.str);
-    int ret = docu_rece(path);
+    char newfilename[4096] = {0};
+    char enter[10] = "\n";
+    delete_sub_str(path, enter, newfilename);
+    int ret = docu_rece(newfilename);
     printf("111");
     return ret;
 }
@@ -463,6 +473,7 @@ int recv_file(Message message){
 void trans_file(Message message){
     char path[4096] = "file/";
     strcat(path, message.str);
+    printf("%s\n",path);
     docu_send(path);
 }
 
@@ -481,7 +492,7 @@ void send_blist(){
     fclose(fp);
     Packet packet;
     Data data;
-    sprintf(data.message.str, "%d", line-1);
+    sprintf(data.message.str, "%d", line - 1);
     build_packet(&packet,enum_blist,data);
     write(client_socket,&packet,sizeof(Packet));
     for(i = 0; i < line; i++){
@@ -492,11 +503,111 @@ void send_blist(){
     return;
 }
 
+void send_bcont(Message message){
+    char bbslist[MAXMSG][MAXLEN];
+    int line = 0;
+    int i;
+    FILE *fp = fopen(message.str, "r");
+    if(!fp){
+        printf("can't open file\n");
+        return;
+    }
+    while(!feof(fp)){
+        fscanf(fp, "%s", bbslist[line++]);
+    }
+    fclose(fp);
+    Packet packet;
+    Data data;
+    sprintf(data.message.str, "%d", line - 1);
+    build_packet(&packet,enum_bcont,data);
+    write(client_socket,&packet,sizeof(Packet));
+    for(i = 0; i < line; i++){
+        strcpy(data.message.str, bbslist[i]);
+        build_packet(&packet,enum_bcont,data);
+        write(client_socket,&packet,sizeof(Packet));
+    }
+    return;
+}
+
+void post_bbs(Message message){
+    char filename[MAXLEN] = {0};
+    char content[MAXLEN] = {0};
+    int i;
+    for(i = 0; message.str[i] != '/'; i++);
+    strncpy(filename, message.str, i);
+    strcpy(content, &message.str[i + 1]);
+    FILE *fp = fopen(filename, "w");
+    if(!fp){
+        printf("can't open file\n");
+        return;
+    }
+    fprintf(fp, "%s", content);
+    fclose(fp);
+    fp = fopen("bbslist.txt", "a");
+    if(!fp){
+        printf("can't open file\n");
+        return;
+    }
+    fprintf(fp, "%s", content);
+    fclose(fp);
+}
+
+void reply_bbs(Message message){
+    char filename[MAXLEN] = {0};
+    char content[MAXLEN] = {0};
+    strcpy(filename, message.id_to);
+    strcpy(content, message.str);
+    //FILE *fp = fopen(filename, "w");
+    FILE *fp = fopen(filename, "a");
+    if(!fp){
+        printf("can't open file\n");
+        return;
+    }
+    fprintf(fp, "%s", content);
+    fclose(fp);
+}
+
+void post_bbs_f(Message message){
+    char filename[MAXLEN] = {0};
+    char docuname[MAXLEN] = {0};
+    char content[MAXLEN] = {0};
+    int i, times;
+    for(i = 0; message.str[i] != '/'; i++);
+    strncpy(filename, message.str, i);
+    strcpy(content, &message.str[i + 1]);
+    times = 6;
+    i = 0;
+    while(times > 0){
+        for(; message.str[i] != '/'; i++);
+        times--;
+        i++;
+    }
+    i--;
+    strcpy(docuname, &message.str[i + 1]);
+    FILE *fp = fopen(filename, "w");
+    if(!fp){
+        printf("can't open file\n");
+        return;
+    }
+    fprintf(fp, "%s", content);
+    fclose(fp);
+    fp = fopen("bbslist.txt", "a");
+    if(!fp){
+        printf("can't open file\n");
+        return;
+    }
+    fprintf(fp, "%s", content);
+    fclose(fp);
+    Data data;
+    strcpy(data.message.str, docuname);
+    recv_file(data.message);
+}
+
+
 void handle_packet(Packet packet){
     Kind kind;
     Data data;
     parse_packet(packet, &kind, &data);
-    
     int ret = 0;
     switch (kind) {
         case enum_regist:
@@ -523,8 +634,25 @@ void handle_packet(Packet packet){
         case enum_fyes:
             trans_file(data.message);
             break;
+        case enum_bfyes:
+            build_packet(&packet,enum_bfyes,data);
+            write(client_socket,&packet,sizeof(packet));
+            trans_file(data.message);
+            break;
         case enum_blist:
             send_blist();
+            break;
+        case enum_bcont:
+            send_bcont(data.message);
+            break;
+        case enum_bpost:
+            post_bbs(data.message);
+            break;
+        case enum_bpostf:
+            post_bbs_f(data.message);
+            break;
+        case enum_brepl:
+            reply_bbs(data.message);
             break;
         default:
             printf("oops, we failed in catch your kind: %d\n", kind);
@@ -561,7 +689,7 @@ void write_to(){
             {
                 parse_packet(space->packet[msglength%MAXMSG], &kind, &data);
                 printf("%s,%s\n",data.message.id_to,data.message.str);
-                if(strcmp(fork_name, data.message.id_to) == 0)
+                if(strcmp(fork_name, data.message.id_to) == 0 || (strcmp("_all_", data.message.id_to) == 0&&strcmp(data.message.id_from,fork_name)!=0))
                 {
                     write(client_socket,&(space->packet[msglength%MAXMSG]),sizeof(Packet));
                 }
@@ -683,4 +811,55 @@ int init_socket(int port, int addr){
         return -1;
     }
     return server_socket;
+}
+
+int delete_sub_str(const char *str, const char *sub_str, char *result_str){
+    int count = 0;
+    int str_len = strlen(str);
+    int sub_str_len = strlen(sub_str);
+
+    if (str == NULL)
+    {
+        result_str = NULL;
+        return 0;
+    }
+
+    if (str_len < sub_str_len || sub_str == NULL)
+    {
+        while (*str != '\0')
+        {
+            *result_str = *str;
+            str++;
+            result_str++;
+        }
+
+        return 0;
+    }
+
+    while (*str != '\0')
+    {
+        while (*str != *sub_str && *str != '\0')
+        {
+            *result_str = *str;
+            str++;
+            result_str++;
+        }
+
+        if (strncmp(str, sub_str, sub_str_len) != 0)
+        {
+            *result_str = *str;
+            str++;
+            result_str++;
+            continue;
+        }
+        else
+        {
+            count++;
+            str += sub_str_len;
+        }
+    }
+
+    *result_str = '\0';
+
+    return count;
 }
